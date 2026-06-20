@@ -5,7 +5,7 @@ vpc_cidr       = "10.20.0.0/16"
 azs            = ["us-east-1a", "us-east-1b"]
 public_subnets = ["10.20.1.0/24", "10.20.2.0/24"]
 
-# Buscar AMI Ubuntu 22.04 LTS vigente en la región (owner 099720109477 = Canonical):
+# Find the current Ubuntu 22.04 LTS AMI in the region (owner 099720109477 = Canonical):
 # aws ec2 describe-images --owners 099720109477 \
 #   --filters "Name=name,Values=ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*" \
 #   --query 'sort_by(Images,&CreationDate)[-1].ImageId' --output text --region us-east-1
@@ -13,5 +13,5 @@ ami_id        = "ami-XXXXXXXXXXXXXXXXX"
 instance_type = "t3.micro"
 
 enable_uwsgi = false
-html_title   = "POC AWS — Sergio Hernández"
-html_message = "Infraestructura desplegada con Terraform: VPC + ALB + EC2"
+html_title   = "POC AWS — Sergio Hernandez"
+html_message = "Infrastructure deployed with Terraform: VPC + ALB + EC2"

@@ -1,25 +1,25 @@
 # poc-aws-infra-deploy
 
-POC de infraestructura AWS para entrevista de trabajo: **VPC + ALB + Application Server (nginx, con bonus uWSGI)**.
+AWS infrastructure POC for a job interview exercise: **VPC + ALB + Application Server (nginx, with a uWSGI bonus)**.
 
-Toda la configuración vive en **`poc/`** (carpeta de ambiente único, sin multi-cuenta/multi-tier). La raíz del repo ya no se usa para desplegar.
+All configuration lives at the repo root (single-environment setup, no multi-account/multi-tier structure).
 
-Orquesta 4 módulos Terraform propios:
+Orchestrates 4 of my own Terraform modules:
 - [mod-aws-vpc](https://github.com/sergiohl1324/mod-aws-vpc)
-- [mod-aws-security-group](https://github.com/sergiohl1324/mod-aws-security-group) (SG del ALB)
+- [mod-aws-security-group](https://github.com/sergiohl1324/mod-aws-security-group) (ALB security group)
 - [mod-aws-alb](https://github.com/sergiohl1324/mod-aws-alb)
-- [mod-aws-app-server](https://github.com/sergiohl1324/mod-aws-app-server) (a su vez usa `mod-aws-security-group` y [mod-aws-iam-role](https://github.com/sergiohl1324/mod-aws-iam-role))
+- [mod-aws-app-server](https://github.com/sergiohl1324/mod-aws-app-server) (itself uses `mod-aws-security-group` and [mod-aws-iam-role](https://github.com/sergiohl1324/mod-aws-iam-role))
 
-## Arquitectura
+## Architecture
 
-- 1 VPC, sin NAT Gateway (ahorro de costo) — el Application Server vive en subnet **pública** con IP pública propia para salida a internet (apt/pip/SSM).
-- 1 ALB (HTTP:80) → 1 Target Group → la instancia EC2.
-- El Security Group del EC2 solo permite ingress :80 **desde el SG del ALB** — sin SSH abierto. Acceso administrativo vía **SSM Session Manager**.
-- Bonus uWSGI controlado por la variable `enable_uwsgi`: en `false` nginx sirve el HTML estático; en `true` nginx hace reverse proxy a uWSGI.
+- 1 VPC, no NAT Gateway (cost saving) — the Application Server lives in a **public** subnet with its own public IP for outbound internet access (apt/pip/SSM).
+- 1 ALB (HTTP:80) → 1 Target Group → the EC2 instance.
+- The EC2 security group only allows ingress on :80 **from the ALB's security group** — no SSH exposed. Administrative access via **SSM Session Manager**.
+- uWSGI bonus controlled by the `enable_uwsgi` variable: `false` serves the static HTML via nginx; `true` makes nginx reverse-proxy to uWSGI.
 
-## Backend de state
+## State backend
 
-S3 remoto (bucket creado/administrado fuera de este repo):
+Remote S3 (bucket created/managed outside this repo):
 
 ```hcl
 backend "s3" {
@@ -31,44 +31,43 @@ backend "s3" {
 }
 ```
 
-`use_lockfile = true` usa el locking nativo de S3 (Terraform >= 1.15.5) — no se necesita tabla DynamoDB.
+`use_lockfile = true` uses S3's native locking (Terraform >= 1.15.5) — no DynamoDB table needed.
 
-## Requisito de visibilidad
+## Visibility requirement
 
-`mod-aws-security-group` es un repo histórico que hoy sigue **privado**. Como ahora `poc/main.tf` y `mod-aws-app-server` lo referencian vía `git::https://github.com/...`, debe quedar **público** (igual que se hizo con `mod-aws-vpc`) para que `terraform init` funcione sin credenciales adicionales.
+`mod-aws-security-group` is a legacy repo. Since `main.tf` and `mod-aws-app-server` reference it via `git::https://github.com/...`, it must stay **public** (same as `mod-aws-vpc`) so `terraform init` works without extra credentials.
 
-## Uso
+## Usage
 
 ```bash
-cd poc/
 cp terraform.tfvars.example terraform.tfvars
-# Editar terraform.tfvars: completar ami_id con un AMI Ubuntu 22.04/24.04 LTS vigente en la región
+# Edit terraform.tfvars: set ami_id to a current Ubuntu 22.04/24.04 LTS AMI in your region
 
 terraform init
 terraform plan
 terraform apply
 ```
 
-Probar:
+Test it:
 
 ```bash
 curl http://$(terraform output -raw alb_dns_name)
 ```
 
-Debe responder el HTML con "Served via: nginx static".
+Should return the HTML with "Served via: nginx static".
 
-### Activar el bonus uWSGI
+### Enabling the uWSGI bonus
 
 ```bash
-# en terraform.tfvars: enable_uwsgi = true
+# in terraform.tfvars: enable_uwsgi = true
 terraform apply
 ```
 
-El plan mostrará `# forces replacement` en la instancia EC2 (cambia el `user_data`, a propósito no se ignora ese cambio — ver README de `mod-aws-app-server`). Esperar boot (~2-3 min, compila uWSGI) y volver a `curl` — ahora debe responder "Served via: nginx + uWSGI".
+The plan will show `# forces replacement` on the EC2 instance (the `user_data` change is intentionally not ignored — see `mod-aws-app-server`'s README). Wait for boot (~2-3 min, compiles uWSGI) and `curl` again — it should now respond "Served via: nginx + uWSGI".
 
-### Debug
+### Debugging
 
-Sin SSH abierto:
+No SSH exposed:
 
 ```bash
 aws ssm start-session --target $(terraform output -raw app_server_instance_id)
@@ -76,16 +75,16 @@ cat /var/log/user-data.log
 journalctl -u uwsgi
 ```
 
-### Al terminar — destruir
+### When done — destroy
 
 ```bash
 terraform destroy
 ```
 
-**Importante:** el ALB tiene costo fijo por hora (~$0.0225/h + LCU) y la EC2 también — no dejar la infra corriendo después de la entrevista.
+**Important:** the ALB has a fixed hourly cost (~$0.0225/h + LCU) and so does the EC2 instance — don't leave the infrastructure running after the interview.
 
-## Notas de implementación
+## Implementation notes
 
-- **Versiones:** `required_version >= 1.15.5`, provider `hashicorp/aws ~> 6.47` en todos los módulos y aquí — igual que los ejemplos de referencia.
-- Los módulos se referencian con `?ref=main` (no hay tags `v0.1.0` creados todavía porque la herramienta usada para automatizar esto no tenía permiso para crear git tags vía API). Para fijar versión real: en cada repo de módulo ejecutar `git fetch && git tag v0.1.0 && git push --tags`, y luego cambiar `?ref=main` por `?ref=v0.1.0` en `poc/main.tf`.
-- El SG del ALB y el del Application Server se crean ambos vía el módulo `mod-aws-security-group` (ya no hay `resource "aws_security_group"` inline en este repo ni en `mod-aws-app-server`).
+- **Versions:** `required_version >= 1.15.5`, provider `hashicorp/aws ~> 6.47` across all modules and here — matching the reference examples.
+- Modules are referenced with `?ref=main` (no `v0.1.0` tags exist yet — the tool used to automate this didn't have permission to create git tags via the API). To pin a real version: in each module repo run `git fetch && git tag v0.1.0 && git push --tags`, then change `?ref=main` to `?ref=v0.1.0` in `main.tf`.
+- Both the ALB's security group and the Application Server's security group are created via the `mod-aws-security-group` module (no inline `resource "aws_security_group"` in this repo or in `mod-aws-app-server`).
