@@ -4,7 +4,7 @@ module "sg_alb" {
   source = "git::https://github.com/sergiohl1324/mod-aws-security-group.git?ref=main"
 
   name        = "${var.project}-sg-alb"
-  description = "Permite HTTP entrante desde internet"
+  description = "Allow HTTP entrance from Internet"
   vpc_id      = module.vpc.vpc_id
 
   ingress_with_cidr_blocks = [
@@ -12,7 +12,7 @@ module "sg_alb" {
       from_port   = 80
       to_port     = 80
       protocol    = "tcp"
-      description = "HTTP desde internet"
+      description = "HTTP from internet"
       cidr_blocks = "0.0.0.0/0"
     }
   ]
