@@ -1,0 +1,11 @@
+region         = "us-east-2"
+project        = "genlogs"
+environment    = "poc"
+vpc_cidr       = "10.20.0.0/16"
+azs            = ["us-east-2a", "us-east-2b"]
+public_subnets = ["10.20.1.0/24", "10.20.2.0/24"]
+ami_id         = "ami-0ea1cddefe0c4aed5"
+instance_type  = "t3.micro"
+enable_uwsgi   = true
+html_title     = "POC AWS — Sergio Hernandez"
+html_message   = "Infrastructure deployed with Terraform: VPC + ALB + EC2"
